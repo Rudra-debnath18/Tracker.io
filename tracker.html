@@ -8,6 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
 
     <style>
         :root,
@@ -83,7 +84,7 @@
 
         * {
             box-sizing: border-box;
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
         }
 
         .mono {
@@ -99,9 +100,9 @@
             overflow-x: auto;
             user-select: none;
             -webkit-font-smoothing: antialiased;
-            transition: background-color 0.2s ease, color 0.2s ease;
         }
 
+        /* theme helpers */
         .txt-main { color: var(--text-main); }
         .txt-sub { color: var(--text-secondary); }
         .txt-muted { color: var(--text-muted); }
@@ -113,18 +114,16 @@
         .bg-bar { background-color: var(--bar-primary); }
         .bg-track { background-color: var(--bar-track); }
 
-        ::-webkit-scrollbar { width: 7px; height: 7px; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: var(--bg-workbook); }
-        ::-webkit-scrollbar-thumb { background: var(--text-muted); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: var(--text-muted); border-radius: 3px; }
 
         .bar-anim {
-            transition: height 0.35s cubic-bezier(0.16, 1, 0.3, 1),
-                        width 0.35s cubic-bezier(0.16, 1, 0.3, 1),
-                        background-color 0.2s ease;
+            transition: height 0.25s ease-out, width 0.25s ease-out;
         }
 
         .donut-anim {
-            transition: stroke-dasharray 0.5s cubic-bezier(0.16, 1, 0.3, 1), stroke 0.25s ease;
+            transition: stroke-dasharray 0.4s ease-out;
         }
 
         .workbook {
@@ -146,7 +145,7 @@
             background-color: var(--bg-header);
             color: var(--text-on-header);
             font-weight: 700;
-            letter-spacing: 0.025em;
+            letter-spacing: 0.02em;
             text-align: center;
         }
 
@@ -157,30 +156,33 @@
             text-align: center;
         }
 
+        /* keep 30px strict otherwise col 1/2/3 desync on zoom */
         .row-h {
             height: 30px;
             min-height: 30px;
             max-height: 30px;
         }
 
+        .row-hover-left { background-color: var(--bg-habits-row-hover) !important; }
+        .row-hover-main { background-color: var(--bg-row-hover) !important; }
+
+        /* custom check - disable pointer events so parent div handles drag-to-paint */
         .chk {
             appearance: none;
             -webkit-appearance: none;
             width: 16px;
             height: 16px;
             border: 1.5px solid var(--check-border);
-            border-radius: 3.5px;
+            border-radius: 3px;
             background-color: var(--check-bg);
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            transition: transform 0.12s ease, background-color 0.12s ease, border-color 0.12s ease;
             margin: 0;
-            cursor: pointer;
+            pointer-events: none;
         }
 
         .check-cell:hover .chk {
-            transform: scale(1.08);
             border-color: var(--bar-primary);
         }
 
@@ -191,8 +193,8 @@
 
         .chk:checked::after {
             content: '';
-            width: 8.5px;
-            height: 4.5px;
+            width: 8px;
+            height: 4px;
             border-left: 2px solid var(--check-mark);
             border-bottom: 2px solid var(--check-mark);
             transform: rotate(-45deg) translate(0.5px, -1px);
@@ -203,7 +205,7 @@
             appearance: none;
             -webkit-appearance: none;
             background: transparent;
-            font-size: 10.5px;
+            font-size: 11px;
             font-weight: 700;
             color: var(--text-main);
             width: 100%;
@@ -222,7 +224,7 @@
         }
 
         .day-label-rot {
-            transform: rotate(-52deg);
+            transform: rotate(-50deg);
             transform-origin: top center;
             font-size: 9px;
             font-weight: 700;
@@ -236,11 +238,11 @@
 </head>
 <body class="min-h-screen flex flex-col justify-between pb-10">
 
-    <!-- Top bar -->
+    <!-- navbar -->
     <header class="sticky top-0 z-40 panel border-b px-3 sm:px-5 py-2 flex flex-wrap items-center justify-between gap-2 shadow-sm">
         <div class="flex items-center gap-3 flex-wrap">
             <div class="flex items-center gap-2">
-                <div class="w-7 h-7 rounded-md hdr flex items-center justify-center text-xs font-extrabold shadow-sm">
+                <div class="w-7 h-7 rounded hdr flex items-center justify-center text-xs font-extrabold shadow-sm">
                     ⚡
                 </div>
                 <div>
@@ -253,57 +255,61 @@
                         </span>
                     </div>
                     <p class="text-[10px] font-medium mt-0.5 hidden sm:block txt-muted">
-                        Monthly habit matrix • UI Layout
+                        Monthly habit matrix • click & drag to mark
                     </p>
                 </div>
             </div>
 
             <div class="hidden xl:flex items-center gap-2 pl-2 border-l bdr-strong">
-                <div class="px-2.5 py-1 rounded-md panel-alt flex items-center gap-1.5 text-[11px] font-bold">
-                    <span>🔥 Best Streak:</span>
-                    <span id="topStreak" class="mono font-extrabold text-amber-500">5d</span>
+                <div class="px-2.5 py-1 rounded panel-alt flex items-center gap-1.5 text-[11px] font-bold">
+                    <span>🔥 Streak:</span>
+                    <span id="topStreak" class="mono font-extrabold text-amber-500">0d</span>
                 </div>
-                <div class="px-2.5 py-1 rounded-md panel-alt flex items-center gap-1.5 text-[11px] font-bold">
+                <div class="px-2.5 py-1 rounded panel-alt flex items-center gap-1.5 text-[11px] font-bold">
                     <span>⚡ <span id="activeDayLbl">Today</span>:</span>
-                    <span id="todayPct" class="mono font-extrabold text-emerald-500">80%</span>
+                    <span id="todayPct" class="mono font-extrabold text-emerald-500">0%</span>
                 </div>
             </div>
         </div>
 
         <div class="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-            <button title="Check all habits for today"
-                class="px-2.5 py-1.5 rounded-md text-[11px] font-bold bg-emerald-600 hover:bg-emerald-500 text-white transition flex items-center gap-1 shadow-sm cursor-pointer">
+            <button onclick="checkAllToday()" title="Mark all for today"
+                class="px-2.5 py-1.5 rounded text-[11px] font-bold bg-emerald-600 hover:bg-emerald-500 text-white transition flex items-center gap-1 shadow-sm cursor-pointer">
                 <span>✓ Complete Day</span>
             </button>
 
-            <button class="px-2.5 py-1.5 rounded-md text-[11px] font-bold hdr hover:opacity-90 transition flex items-center gap-1 shadow-sm cursor-pointer">
+            <button onclick="showModal()"
+                class="px-2.5 py-1.5 rounded text-[11px] font-bold hdr hover:opacity-90 transition flex items-center gap-1 shadow-sm cursor-pointer">
                 <span>+ Habit</span>
             </button>
 
-            <button title="Wipe current month checks"
-                class="px-2.5 py-1.5 rounded-md text-[11px] font-semibold panel-alt txt-muted hover:text-rose-500 transition cursor-pointer">
+            <button onclick="clearMonth()" title="Clear current month"
+                class="px-2.5 py-1.5 rounded text-[11px] font-semibold panel-alt txt-muted hover:text-rose-500 transition cursor-pointer">
                 Reset Month
             </button>
 
-            <div class="flex items-center p-0.5 rounded-lg panel-alt border bdr-strong">
-                <button id="btnSlate" class="px-2 py-1 rounded-md text-[11px] font-bold transition-all flex items-center gap-1 bg-[#0F172A] text-white shadow-sm cursor-pointer">
+            <div class="flex items-center p-0.5 rounded panel-alt border bdr-strong">
+                <button id="btnSlate" onclick="setTheme('slate')"
+                    class="px-2 py-1 rounded text-[11px] font-bold transition-all flex items-center gap-1 cursor-pointer">
                     <span>🌤️ Slate</span>
                 </button>
-                <button id="btnMidnight" class="px-2 py-1 rounded-md text-[11px] font-bold transition-all flex items-center gap-1 text-slate-600 hover:text-slate-900 cursor-pointer">
+                <button id="btnMidnight" onclick="setTheme('midnight')"
+                    class="px-2 py-1 rounded text-[11px] font-bold transition-all flex items-center gap-1 cursor-pointer">
                     <span>🌙 Midnight</span>
                 </button>
             </div>
         </div>
     </header>
 
-    <!-- Main grid -->
+    <!-- main workspace -->
     <main class="w-full overflow-x-auto p-2 sm:p-3.5 flex-1">
-        <div class="min-w-[1400px] max-w-[1720px] mx-auto workbook rounded-md shadow-lg p-2.5 space-y-2.5">
+        <!-- force min-width so 31 day cols don't crush on 13" screens -->
+        <div class="min-w-[1360px] max-w-[1700px] mx-auto workbook rounded shadow-lg p-2.5 space-y-2.5">
 
-            <!-- Row 1: Settings & Top Charts -->
+            <!-- top row: controls + charts -->
             <div class="grid grid-cols-12 gap-2.5 items-stretch">
 
-                <!-- Date Picker & Mini stats -->
+                <!-- date selector -->
                 <div class="col-span-2 panel rounded-sm p-2 flex flex-col justify-between space-y-1.5">
                     <div class="hdr py-2 rounded-sm text-xs tracking-wider uppercase font-extrabold">
                         Leveling Tracker.io
@@ -316,9 +322,8 @@
                     <div class="grid grid-cols-12 border bdr-strong rounded-sm overflow-hidden text-xs">
                         <div class="col-span-5 hdr py-1.5 flex items-center justify-center text-[11px]">Year</div>
                         <div class="col-span-7 flex items-center justify-center panel-alt">
-                            <select id="yearSel" class="w-full h-full text-center mono font-bold bg-transparent outline-none cursor-pointer py-1 txt-main">
-                                <option value="2026" selected>2026</option>
-                                <option value="2027">2027</option>
+                            <select id="yearSel" onchange="onDateChange()"
+                                class="w-full h-full text-center mono font-bold bg-transparent outline-none cursor-pointer py-1 txt-main">
                             </select>
                         </div>
                     </div>
@@ -326,7 +331,8 @@
                     <div class="grid grid-cols-12 border bdr-strong rounded-sm overflow-hidden text-xs">
                         <div class="col-span-5 hdr py-1.5 flex items-center justify-center text-[11px]">Month</div>
                         <div class="col-span-7 flex items-center justify-center panel-alt">
-                            <select id="monthSel" class="w-full h-full text-center font-bold bg-transparent outline-none cursor-pointer py-1 txt-main">
+                            <select id="monthSel" onchange="onDateChange()"
+                                class="w-full h-full text-center font-bold bg-transparent outline-none cursor-pointer py-1 txt-main">
                                 <option value="0">January</option>
                                 <option value="1">February</option>
                                 <option value="2">March</option>
@@ -336,7 +342,7 @@
                                 <option value="6">July</option>
                                 <option value="7">August</option>
                                 <option value="8">September</option>
-                                <option value="9" selected>October</option>
+                                <option value="9">October</option>
                                 <option value="10">November</option>
                                 <option value="11">December</option>
                             </select>
@@ -346,16 +352,16 @@
                     <div class="grid grid-cols-2 gap-1.5 pt-0.5 text-[10px]">
                         <div class="panel-alt rounded-sm p-1.5 text-center">
                             <div class="font-semibold txt-muted">Perfect Days</div>
-                            <div id="perfectDaysEl" class="mono font-extrabold text-xs mt-0.5 txt-main">4</div>
+                            <div id="perfectDaysEl" class="mono font-extrabold text-xs mt-0.5 txt-main">0</div>
                         </div>
                         <div class="panel-alt rounded-sm p-1.5 text-center">
-                            <div class="font-semibold txt-muted">Maxed Habits</div>
-                            <div id="crownsEl" class="mono font-extrabold text-xs mt-0.5 txt-main">1 👑</div>
+                            <div class="font-semibold txt-muted">Maxed</div>
+                            <div id="crownsEl" class="mono font-extrabold text-xs mt-0.5 txt-main">0 👑</div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Daily vertical bar chart (Static UI Preview) -->
+                <!-- daily bar chart -->
                 <div class="col-span-4 panel rounded-sm flex flex-col justify-between overflow-hidden">
                     <div class="hdr py-1.5 px-3 text-xs flex items-center justify-between">
                         <span>Daily Progress</span>
@@ -380,32 +386,15 @@
                                     <div class="w-full h-0"></div>
                                 </div>
 
-                                <div id="dailyBars" class="relative z-10 w-full h-full flex items-end gap-[2.5px] pt-1 px-0.5">
-                                    <!-- Static UI sample bars -->
-                                    <div class="flex-1 h-full flex items-end"><div class="w-full rounded-t-[1.5px] bg-bar" style="height: 60%;"></div></div>
-                                    <div class="flex-1 h-full flex items-end"><div class="w-full rounded-t-[1.5px] bg-bar" style="height: 80%;"></div></div>
-                                    <div class="flex-1 h-full flex items-end"><div class="w-full rounded-t-[1.5px] bg-bar" style="height: 100%;"></div></div>
-                                    <div class="flex-1 h-full flex items-end"><div class="w-full rounded-t-[1.5px] bg-bar" style="height: 40%;"></div></div>
-                                    <div class="flex-1 h-full flex items-end"><div class="w-full rounded-t-[1.5px] bg-bar" style="height: 75%;"></div></div>
-                                    <div class="flex-1 h-full flex items-end"><div class="w-full rounded-t-[1.5px] bg-bar" style="height: 90%;"></div></div>
-                                    <div class="flex-1 h-full flex items-end"><div class="w-full rounded-t-[1.5px] bg-bar" style="height: 50%;"></div></div>
-                                </div>
+                                <div id="dailyBars" class="relative z-10 w-full h-full flex items-end gap-0.5 pt-1 px-0.5"></div>
                             </div>
                         </div>
 
-                        <div id="dailyXAxis" class="flex items-center pl-10 pr-0.5 pt-2 h-6">
-                            <div class="flex-1 flex justify-center"><span class="day-label-rot">Su</span></div>
-                            <div class="flex-1 flex justify-center"><span class="day-label-rot">Mo</span></div>
-                            <div class="flex-1 flex justify-center"><span class="day-label-rot">Tu</span></div>
-                            <div class="flex-1 flex justify-center"><span class="day-label-rot">We</span></div>
-                            <div class="flex-1 flex justify-center"><span class="day-label-rot">Th</span></div>
-                            <div class="flex-1 flex justify-center"><span class="day-label-rot">Fr</span></div>
-                            <div class="flex-1 flex justify-center"><span class="day-label-rot">Sa</span></div>
-                        </div>
+                        <div id="dailyXAxis" class="flex items-center pl-10 pr-0.5 pt-2 h-6"></div>
                     </div>
                 </div>
 
-                <!-- 5-Week average bars -->
+                <!-- weekly averages -->
                 <div class="col-span-3 panel rounded-sm flex flex-col justify-between overflow-hidden">
                     <div class="hdr py-1.5 text-xs">Weekly Averages</div>
                     <div class="p-2.5 flex-1 flex flex-col justify-between">
@@ -427,13 +416,7 @@
                                     <div class="w-full h-0"></div>
                                 </div>
 
-                                <div id="weeklyBars" class="relative z-10 w-full h-full grid grid-cols-5 gap-3 px-3 items-end pt-1">
-                                    <div class="h-full flex items-end justify-center"><div class="w-full max-w-[42px] rounded-t-sm bg-bar" style="height: 75%;"></div></div>
-                                    <div class="h-full flex items-end justify-center"><div class="w-full max-w-[42px] rounded-t-sm bg-bar" style="height: 60%;"></div></div>
-                                    <div class="h-full flex items-end justify-center"><div class="w-full max-w-[42px] rounded-t-sm bg-bar" style="height: 85%;"></div></div>
-                                    <div class="h-full flex items-end justify-center"><div class="w-full max-w-[42px] rounded-t-sm bg-bar" style="height: 40%;"></div></div>
-                                    <div class="h-full flex items-end justify-center"><div class="w-full max-w-[42px] rounded-t-sm bg-bar" style="height: 20%;"></div></div>
-                                </div>
+                                <div id="weeklyBars" class="relative z-10 w-full h-full grid grid-cols-5 gap-3 px-3 items-end pt-1"></div>
                             </div>
                         </div>
 
@@ -447,20 +430,20 @@
                     </div>
                 </div>
 
-                <!-- Overall Monthly Donut -->
+                <!-- monthly donut -->
                 <div class="col-span-3 grid grid-cols-12 gap-2">
                     <div class="col-span-4 flex flex-col justify-between space-y-1.5">
                         <div class="panel-alt rounded-sm flex-1 flex flex-col overflow-hidden">
                             <div class="hdr py-1 text-[11px]">Goal</div>
-                            <div id="totGoal" class="flex-1 flex items-center justify-center mono font-extrabold text-sm txt-main">310</div>
+                            <div id="totGoal" class="flex-1 flex items-center justify-center mono font-extrabold text-sm txt-main">0</div>
                         </div>
                         <div class="panel-alt rounded-sm flex-1 flex flex-col overflow-hidden">
                             <div class="hdr py-1 text-[11px]">Done</div>
-                            <div id="totDone" class="flex-1 flex items-center justify-center mono font-extrabold text-sm text-emerald-500">186</div>
+                            <div id="totDone" class="flex-1 flex items-center justify-center mono font-extrabold text-sm text-emerald-500">0</div>
                         </div>
                         <div class="panel-alt rounded-sm flex-1 flex flex-col overflow-hidden">
                             <div class="hdr py-1 text-[11px]">Left</div>
-                            <div id="totLeft" class="flex-1 flex items-center justify-center mono font-extrabold text-sm txt-sub">124</div>
+                            <div id="totLeft" class="flex-1 flex items-center justify-center mono font-extrabold text-sm txt-sub">0</div>
                         </div>
                     </div>
 
@@ -469,12 +452,12 @@
                         <div class="flex-1 flex items-center justify-center p-2">
                             <div class="relative w-36 h-36 flex items-center justify-center">
                                 <svg class="w-full h-full -rotate-90" viewBox="0 0 36 36">
-                                    <circle cx="18" cy="18" r="13.5" fill="none" stroke="var(--donut-track)" stroke-width="6.2"></circle>
-                                    <circle id="donutRing" cx="18" cy="18" r="13.5" fill="none" stroke="var(--donut-fill)" stroke-width="6.2"
-                                        stroke-dasharray="60 100" stroke-linecap="butt" pathLength="100" class="donut-anim"></circle>
+                                    <circle cx="18" cy="18" r="13.5" fill="none" stroke="var(--donut-track)" stroke-width="6"></circle>
+                                    <circle id="donutRing" cx="18" cy="18" r="13.5" fill="none" stroke="var(--donut-fill)" stroke-width="6"
+                                        stroke-dasharray="0 100" stroke-linecap="butt" pathLength="100" class="donut-anim"></circle>
                                 </svg>
                                 <div class="absolute inset-0 flex flex-col items-center justify-center">
-                                    <span id="donutPct" class="text-xl mono font-extrabold txt-main">60%</span>
+                                    <span id="donutPct" class="text-xl mono font-extrabold txt-main">0%</span>
                                     <span class="text-[9px] font-bold uppercase tracking-wider txt-muted">Total</span>
                                 </div>
                             </div>
@@ -484,102 +467,27 @@
 
             </div>
 
-            <!-- Row 2: Main 3-part Habit Matrix (Static 7-column sample for UI layout) -->
+            <!-- middle row: habit matrix -->
             <div class="grid grid-cols-12 gap-2.5 items-start">
 
-                <!-- Col 1: Habit list -->
+                <!-- habit names col -->
                 <div class="col-span-2 rounded-sm overflow-hidden border bdr-strong shadow-sm" style="background-color: var(--bg-habits-col);">
                     <div class="h-[72px] px-3 flex flex-col items-center justify-center hdr border-b border-slate-800">
                         <span class="text-sm font-extrabold tracking-wide">Habits</span>
                         <span class="text-[9px] font-normal text-slate-400 mt-0.5">Click name to edit</span>
                     </div>
-                    <div id="habitListEl" class="divide-y divide-slate-800">
-                        <div class="row-h px-2 flex items-center justify-between gap-1 text-[11px] font-semibold text-slate-100">
-                            <span class="truncate flex-1">Morning Run / Jog 🏃</span>
-                            <span class="text-[9px] mono px-1 rounded bg-slate-800 text-amber-400 font-bold">3d</span>
-                        </div>
-                        <div class="row-h px-2 flex items-center justify-between gap-1 text-[11px] font-semibold text-slate-100">
-                            <span class="truncate flex-1">DSA & Problem Solving 💻</span>
-                            <span class="text-[9px] mono px-1 rounded bg-slate-800 text-amber-400 font-bold">5d</span>
-                        </div>
-                        <div class="row-h px-2 flex items-center justify-between gap-1 text-[11px] font-semibold text-slate-100">
-                            <span class="truncate flex-1">AI / ML Study Session 🧠</span>
-                            <span class="text-[9px] mono px-1 rounded bg-slate-800 text-amber-400 font-bold">2d</span>
-                        </div>
-                        <div class="row-h px-2 flex items-center text-[10px] text-slate-500 cursor-pointer">
-                            + Add habit...
-                        </div>
-                    </div>
+                    <div id="habitListEl" class="divide-y divide-slate-800"></div>
                 </div>
 
-                <!-- Col 2: Checkboxes Matrix -->
+                <!-- days matrix -->
                 <div class="col-span-7 panel rounded-sm overflow-hidden shadow-sm">
-                    <div id="weekHdr" class="grid grid-cols-7 h-[24px] text-[11px] font-bold border-b bdr-week">
-                        <div class="col-span-7 hdr flex items-center justify-center text-[10px] uppercase tracking-wider">Week 1 (Sample UI)</div>
-                    </div>
-                    <div id="dayNameHdr" class="grid grid-cols-7 h-[24px] text-[10px] font-bold border-b bdr-week">
-                        <div class="flex items-center justify-center border-r bdr-sub subhdr">Su</div>
-                        <div class="flex items-center justify-center border-r bdr-sub subhdr">Mo</div>
-                        <div class="flex items-center justify-center border-r bdr-sub subhdr">Tu</div>
-                        <div class="flex items-center justify-center border-r bdr-sub bg-sky-500/20 text-sky-400 font-extrabold">We</div>
-                        <div class="flex items-center justify-center border-r bdr-sub subhdr">Th</div>
-                        <div class="flex items-center justify-center border-r bdr-sub subhdr">Fr</div>
-                        <div class="flex items-center justify-center subhdr">Sa</div>
-                    </div>
-                    <div id="dayNumHdr" class="grid grid-cols-7 h-[24px] text-[10px] mono font-bold border-b bdr-week">
-                        <div class="flex items-center justify-center border-r bdr-sub panel-alt">1</div>
-                        <div class="flex items-center justify-center border-r bdr-sub panel-alt">2</div>
-                        <div class="flex items-center justify-center border-r bdr-sub panel-alt">3</div>
-                        <div class="flex items-center justify-center border-r bdr-sub bg-sky-500 text-slate-950 font-extrabold">4</div>
-                        <div class="flex items-center justify-center border-r bdr-sub panel-alt">5</div>
-                        <div class="flex items-center justify-center border-r bdr-sub panel-alt">6</div>
-                        <div class="flex items-center justify-center panel-alt">7</div>
-                    </div>
-                    <div id="matrixBody" class="divide-y bdr-sub">
-                        <!-- Habit Row 1 -->
-                        <div class="row-h grid grid-cols-7">
-                            <div class="check-cell flex items-center justify-center border-r bdr-sub bg-cell"><input type="checkbox" class="chk" checked /></div>
-                            <div class="check-cell flex items-center justify-center border-r bdr-sub bg-cell"><input type="checkbox" class="chk" checked /></div>
-                            <div class="check-cell flex items-center justify-center border-r bdr-sub bg-cell"><input type="checkbox" class="chk" /></div>
-                            <div class="check-cell flex items-center justify-center border-r bdr-sub bg-cell today-col"><input type="checkbox" class="chk" checked /></div>
-                            <div class="check-cell flex items-center justify-center border-r bdr-sub bg-cell"><input type="checkbox" class="chk" /></div>
-                            <div class="check-cell flex items-center justify-center border-r bdr-sub bg-cell"><input type="checkbox" class="chk" /></div>
-                            <div class="check-cell flex items-center justify-center bg-cell"><input type="checkbox" class="chk" /></div>
-                        </div>
-                        <!-- Habit Row 2 -->
-                        <div class="row-h grid grid-cols-7">
-                            <div class="check-cell flex items-center justify-center border-r bdr-sub bg-cell"><input type="checkbox" class="chk" checked /></div>
-                            <div class="check-cell flex items-center justify-center border-r bdr-sub bg-cell"><input type="checkbox" class="chk" checked /></div>
-                            <div class="check-cell flex items-center justify-center border-r bdr-sub bg-cell"><input type="checkbox" class="chk" checked /></div>
-                            <div class="check-cell flex items-center justify-center border-r bdr-sub bg-cell today-col"><input type="checkbox" class="chk" checked /></div>
-                            <div class="check-cell flex items-center justify-center border-r bdr-sub bg-cell"><input type="checkbox" class="chk" /></div>
-                            <div class="check-cell flex items-center justify-center border-r bdr-sub bg-cell"><input type="checkbox" class="chk" /></div>
-                            <div class="check-cell flex items-center justify-center bg-cell"><input type="checkbox" class="chk" /></div>
-                        </div>
-                        <!-- Habit Row 3 -->
-                        <div class="row-h grid grid-cols-7">
-                            <div class="check-cell flex items-center justify-center border-r bdr-sub bg-cell"><input type="checkbox" class="chk" /></div>
-                            <div class="check-cell flex items-center justify-center border-r bdr-sub bg-cell"><input type="checkbox" class="chk" checked /></div>
-                            <div class="check-cell flex items-center justify-center border-r bdr-sub bg-cell"><input type="checkbox" class="chk" checked /></div>
-                            <div class="check-cell flex items-center justify-center border-r bdr-sub bg-cell today-col"><input type="checkbox" class="chk" /></div>
-                            <div class="check-cell flex items-center justify-center border-r bdr-sub bg-cell"><input type="checkbox" class="chk" /></div>
-                            <div class="check-cell flex items-center justify-center border-r bdr-sub bg-cell"><input type="checkbox" class="chk" /></div>
-                            <div class="check-cell flex items-center justify-center bg-cell"><input type="checkbox" class="chk" /></div>
-                        </div>
-                        <!-- Empty Slot Row -->
-                        <div class="row-h grid grid-cols-7">
-                            <div class="border-r bdr-sub bg-empty"></div>
-                            <div class="border-r bdr-sub bg-empty"></div>
-                            <div class="border-r bdr-sub bg-empty"></div>
-                            <div class="border-r bdr-sub bg-empty"></div>
-                            <div class="border-r bdr-sub bg-empty"></div>
-                            <div class="border-r bdr-sub bg-empty"></div>
-                            <div class="bg-empty"></div>
-                        </div>
-                    </div>
+                    <div id="weekHdr" class="grid h-[24px] text-[11px] font-bold border-b bdr-week"></div>
+                    <div id="dayNameHdr" class="grid h-[24px] text-[10px] font-bold border-b bdr-week"></div>
+                    <div id="dayNumHdr" class="grid h-[24px] text-[10px] mono font-bold border-b bdr-week"></div>
+                    <div id="matrixBody" class="divide-y bdr-sub"></div>
                 </div>
 
-                <!-- Col 3: Individual habit breakdown -->
+                <!-- habit progress breakdown -->
                 <div class="col-span-3 panel rounded-sm overflow-hidden shadow-sm">
                     <div class="h-[48px] flex items-center justify-center hdr text-sm font-extrabold border-b border-slate-800">
                         Breakdown
@@ -591,49 +499,12 @@
                         <div class="col-span-4 flex items-center justify-center">Progress</div>
                         <div class="col-span-2 flex items-center justify-center">%</div>
                     </div>
-                    <div id="breakdownBody" class="divide-y bdr-sub">
-                        <div class="row-h grid grid-cols-12 divide-x bdr-sub text-[11px] mono">
-                            <div class="col-span-2 flex items-center justify-center font-semibold txt-sub">7</div>
-                            <div class="col-span-2 flex items-center justify-center font-bold txt-main">3</div>
-                            <div class="col-span-2 flex items-center justify-center font-semibold txt-muted">4</div>
-                            <div class="col-span-4 px-1.5 py-1 flex items-center">
-                                <div class="w-full h-3.5 rounded-[2px] overflow-hidden bg-track">
-                                    <div class="h-full bg-bar" style="width: 43%;"></div>
-                                </div>
-                            </div>
-                            <div class="col-span-2 flex items-center justify-center font-extrabold text-[10.5px] txt-main">43%</div>
-                        </div>
-                        <div class="row-h grid grid-cols-12 divide-x bdr-sub text-[11px] mono">
-                            <div class="col-span-2 flex items-center justify-center font-semibold txt-sub">7</div>
-                            <div class="col-span-2 flex items-center justify-center font-bold txt-main">4</div>
-                            <div class="col-span-2 flex items-center justify-center font-semibold txt-muted">3</div>
-                            <div class="col-span-4 px-1.5 py-1 flex items-center">
-                                <div class="w-full h-3.5 rounded-[2px] overflow-hidden bg-track">
-                                    <div class="h-full bg-bar" style="width: 57%;"></div>
-                                </div>
-                            </div>
-                            <div class="col-span-2 flex items-center justify-center font-extrabold text-[10.5px] txt-main">57%</div>
-                        </div>
-                        <div class="row-h grid grid-cols-12 divide-x bdr-sub text-[11px] mono">
-                            <div class="col-span-2 flex items-center justify-center font-semibold txt-sub">7</div>
-                            <div class="col-span-2 flex items-center justify-center font-bold txt-main">2</div>
-                            <div class="col-span-2 flex items-center justify-center font-semibold txt-muted">5</div>
-                            <div class="col-span-4 px-1.5 py-1 flex items-center">
-                                <div class="w-full h-3.5 rounded-[2px] overflow-hidden bg-track">
-                                    <div class="h-full bg-bar" style="width: 29%;"></div>
-                                </div>
-                            </div>
-                            <div class="col-span-2 flex items-center justify-center font-extrabold text-[10.5px] txt-main">29%</div>
-                        </div>
-                        <div class="row-h grid grid-cols-12 divide-x bdr-sub bg-empty">
-                            <div class="col-span-2"></div><div class="col-span-2"></div><div class="col-span-2"></div><div class="col-span-4"></div><div class="col-span-2"></div>
-                        </div>
-                    </div>
+                    <div id="breakdownBody" class="divide-y bdr-sub"></div>
                 </div>
 
             </div>
 
-            <!-- Row 3: Mood/Sleep + Leaderboard -->
+            <!-- bottom row: mood/sleep + top habits -->
             <div class="grid grid-cols-12 gap-2.5 items-stretch">
 
                 <div class="col-span-2 flex flex-col">
@@ -653,17 +524,17 @@
                                 <span class="flex items-center gap-1.5 font-semibold txt-sub">
                                     <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block"></span> Mood
                                 </span>
-                                <span id="avgMoodEl" class="mono font-extrabold txt-main">7.5 / 10</span>
+                                <span id="avgMoodEl" class="mono font-extrabold txt-main">0.0 / 10</span>
                             </div>
                             <div class="flex items-center justify-between py-1.5">
                                 <span class="flex items-center gap-1.5 font-semibold txt-sub">
                                     <span class="w-2.5 h-1 rounded-full inline-block" style="background-color: var(--line-sleep);"></span> Sleep
                                 </span>
-                                <span id="avgSleepEl" class="mono font-extrabold txt-main">7.2 hrs</span>
+                                <span id="avgSleepEl" class="mono font-extrabold txt-main">0.0 hrs</span>
                             </div>
                         </div>
                         <p class="text-[10px] leading-tight txt-muted">
-                            Click any cell in the row to log daily mood or sleep hours.
+                            Select daily values in the grid to update trendline.
                         </p>
                     </div>
                 </div>
@@ -672,24 +543,8 @@
                     <div class="hdr h-[24px] rounded-t-sm flex items-center justify-center text-xs">
                         Wellness Log
                     </div>
-                    <div id="moodRow" class="grid grid-cols-7 h-[26px] panel-alt border-x border-b bdr-strong divide-x">
-                        <div class="flex items-center justify-center bdr-sub"><select class="well-select mono"><option>8</option></select></div>
-                        <div class="flex items-center justify-center bdr-sub"><select class="well-select mono"><option>7</option></select></div>
-                        <div class="flex items-center justify-center bdr-sub"><select class="well-select mono"><option>9</option></select></div>
-                        <div class="flex items-center justify-center bdr-sub"><select class="well-select mono"><option>8</option></select></div>
-                        <div class="flex items-center justify-center bdr-sub"><select class="well-select mono"><option>7</option></select></div>
-                        <div class="flex items-center justify-center bdr-sub"><select class="well-select mono"><option>7</option></select></div>
-                        <div class="flex items-center justify-center bdr-sub"><select class="well-select mono"><option>8</option></select></div>
-                    </div>
-                    <div id="sleepRow" class="grid grid-cols-7 h-[26px] panel-alt border-x border-b bdr-strong rounded-b-sm divide-x">
-                        <div class="flex items-center justify-center bdr-sub"><select class="well-select mono"><option>7</option></select></div>
-                        <div class="flex items-center justify-center bdr-sub"><select class="well-select mono"><option>8</option></select></div>
-                        <div class="flex items-center justify-center bdr-sub"><select class="well-select mono"><option>7</option></select></div>
-                        <div class="flex items-center justify-center bdr-sub"><select class="well-select mono"><option>6</option></select></div>
-                        <div class="flex items-center justify-center bdr-sub"><select class="well-select mono"><option>8</option></select></div>
-                        <div class="flex items-center justify-center bdr-sub"><select class="well-select mono"><option>7</option></select></div>
-                        <div class="flex items-center justify-center bdr-sub"><select class="well-select mono"><option>7</option></select></div>
-                    </div>
+                    <div id="moodRow" class="grid h-[26px] panel-alt border-x border-b bdr-strong divide-x"></div>
+                    <div id="sleepRow" class="grid h-[26px] panel-alt border-x border-b bdr-strong rounded-b-sm divide-x"></div>
 
                     <div class="flex-1 panel rounded-sm mt-1.5 p-2.5 flex flex-col justify-between min-h-[150px]">
                         <div class="flex items-center justify-between px-2">
@@ -706,39 +561,17 @@
                             </div>
                         </div>
                         <div class="relative w-full h-28 pt-1">
-                            <svg id="trendSvg" class="w-full h-full overflow-visible" preserveAspectRatio="none" viewBox="0 0 700 100">
-                                <line x1="0" y1="20" x2="700" y2="20" stroke="var(--grid-guide)" stroke-dasharray="3 3" />
-                                <line x1="0" y1="50" x2="700" y2="50" stroke="var(--grid-guide)" stroke-dasharray="3 3" />
-                                <line x1="0" y1="80" x2="700" y2="80" stroke="var(--grid-guide)" stroke-dasharray="3 3" />
-                                <polyline fill="none" stroke="var(--line-sleep)" stroke-width="2" points="14,50 120,35 240,55 360,65 480,40 600,50 686,45" />
-                                <polyline fill="none" stroke="var(--line-mood)" stroke-width="2.4" points="14,40 120,50 240,25 360,35 480,45 600,30 686,35" />
-                            </svg>
+                            <svg id="trendSvg" class="w-full h-full overflow-visible" preserveAspectRatio="none" viewBox="0 0 700 100"></svg>
                         </div>
                     </div>
                 </div>
 
-                <!-- Leaderboard -->
+                <!-- leaderboard -->
                 <div class="col-span-3 panel rounded-sm flex flex-col overflow-hidden shadow-sm">
                     <div class="hdr h-[26px] flex items-center justify-center text-xs uppercase tracking-wider font-extrabold">
                         Top Habits
                     </div>
-                    <div id="topListEl" class="flex-1 divide-y bdr-sub text-xs">
-                        <div class="px-3 py-1 flex items-center justify-between text-[11px]">
-                            <span class="mono font-extrabold w-6 txt-sub">1</span>
-                            <span class="flex-1 font-semibold truncate txt-main">DSA & Problem Solving 💻</span>
-                            <span class="mono font-bold text-[10px] ml-2 px-1.5 py-0.5 rounded panel-alt txt-sub">57%</span>
-                        </div>
-                        <div class="px-3 py-1 flex items-center justify-between text-[11px]">
-                            <span class="mono font-extrabold w-6 txt-sub">2</span>
-                            <span class="flex-1 font-semibold truncate txt-main">Morning Run / Jog 🏃</span>
-                            <span class="mono font-bold text-[10px] ml-2 px-1.5 py-0.5 rounded panel-alt txt-sub">43%</span>
-                        </div>
-                        <div class="px-3 py-1 flex items-center justify-between text-[11px]">
-                            <span class="mono font-extrabold w-6 txt-sub">3</span>
-                            <span class="flex-1 font-semibold truncate txt-main">AI / ML Study Session 🧠</span>
-                            <span class="mono font-bold text-[10px] ml-2 px-1.5 py-0.5 rounded panel-alt txt-sub">29%</span>
-                        </div>
-                    </div>
+                    <div id="topListEl" class="flex-1 divide-y bdr-sub text-xs"></div>
                 </div>
 
             </div>
@@ -746,17 +579,768 @@
         </div>
     </main>
 
-    <!-- Bottom month tabs -->
+    <!-- bottom sheet tabs -->
     <footer class="fixed bottom-0 left-0 right-0 z-40 panel border-t bdr-strong h-8 flex items-center px-3 gap-1 overflow-x-auto">
-        <button title="New habit" class="px-2 py-0.5 text-xs font-extrabold rounded hover:opacity-80 mr-1 shrink-0 cursor-pointer txt-main">
+        <button onclick="showModal()" title="New habit"
+                class="px-2 py-0.5 text-xs font-extrabold rounded hover:opacity-80 mr-1 shrink-0 cursor-pointer txt-main">
             +
         </button>
-        <div id="monthTabs" class="flex items-center gap-0.5 h-full text-xs font-semibold">
-            <button class="h-full px-3 flex items-center gap-1 border-r bdr-strong panel-alt txt-sub"><span>January</span></button>
-            <button class="h-full px-3 flex items-center gap-1 border-r bdr-strong panel-alt txt-sub"><span>February</span></button>
-            <button class="h-full px-3 flex items-center gap-1 border-r bdr-strong hdr font-extrabold"><span>October</span></button>
-        </div>
+        <div id="monthTabs" class="flex items-center gap-0.5 h-full text-xs font-semibold"></div>
     </footer>
 
+    <!-- new habit modal -->
+    <div id="modalOverlay" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/60 backdrop-blur-sm p-4">
+        <div class="panel rounded border-2 bdr-strong shadow-2xl max-w-md w-full overflow-hidden">
+            <div class="hdr py-2.5 px-4 flex items-center justify-between text-xs uppercase tracking-wider">
+                <span>New Habit</span>
+                <button onclick="hideModal()" class="text-slate-300 hover:text-white font-bold text-sm cursor-pointer">✕</button>
+            </div>
+            <form onsubmit="onAddHabit(event)" class="p-4 space-y-3.5 text-xs">
+                <div>
+                    <label class="block font-bold uppercase mb-1 txt-sub">Habit Name</label>
+                    <input id="habitInput" type="text" required maxlength="34" placeholder="e.g. Morning Jog 🏃"
+                        class="w-full px-3 py-2 rounded-sm border bdr-strong panel-alt font-semibold focus:outline-none txt-main">
+                </div>
+                <div>
+                    <label class="block font-bold uppercase mb-1 txt-sub">Quick Icon</label>
+                    <div id="emojiPicker" class="flex flex-wrap gap-1.5"></div>
+                </div>
+                <div class="flex items-center justify-end gap-2 pt-2 border-t bdr-sub">
+                    <button type="button" onclick="hideModal()"
+                        class="px-3 py-1.5 rounded-sm panel-alt font-bold cursor-pointer txt-sub">
+                        Cancel
+                    </button>
+                    <button type="submit"
+                        class="px-4 py-1.5 rounded-sm hdr font-bold hover:opacity-90 cursor-pointer">
+                        Save
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const STORAGE_KEY = 'lvl_tracker_state';
+        const MAX_ROWS = 14; // keep fixed at 14 so layout doesn't jump
+        const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+        const DAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+        const EMOJIS = ['💻', '🏃', '📖', '🧠', '💪', '🎯', '📓', '💧', '😴', '⚡', '🔥', '🥗'];
+
+        const DEFAULT_HABITS = [
+            'Morning Run / Jog 🏃',
+            'DSA & Problem Solving 💻',
+            'AI / ML Study Session 🧠',
+            'Work on Side Project 🎯',
+            'Read 20 Pages 📖',
+            'Write / Draft Chapter 📓',
+            'Workout / Stretching 💪',
+            'No Doomscrolling',
+            'Drink 3L Water 💧',
+            'Sleep before 12:00 😴'
+        ];
+
+        let state = {
+            theme: 'slate',
+            year: new Date().getFullYear(),
+            month: new Date().getMonth(),
+            habits: [...DEFAULT_HABITS],
+            logs: {} // keyed by "YYYY-M"
+        };
+
+        // drag-to-check state
+        let isDragging = false;
+        let dragTargetVal = true;
+
+        function init() {
+            const ySel = document.getElementById('yearSel');
+            let yHtml = '';
+            for (let y = 2025; y <= 2035; y++) {
+                yHtml += `<option value="${y}">${y}</option>`;
+            }
+            ySel.innerHTML = yHtml;
+
+            document.getElementById('emojiPicker').innerHTML = EMOJIS.map(e => `
+                <button type="button" onclick="appendEmoji('${e}')"
+                    class="w-7 h-7 rounded-sm panel-alt hover:scale-105 transition flex items-center justify-center text-sm cursor-pointer border bdr-strong">
+                    ${e}
+                </button>
+            `).join('');
+
+            document.getElementById('weeklyBars').innerHTML = [0, 1, 2, 3, 4].map(w => `
+                <div id="wkWrap-${w}" class="h-full flex items-end justify-center" title="Week ${w + 1}">
+                    <div id="wkBar-${w}" class="w-full max-w-[40px] bar-anim rounded-t-sm bg-bar" style="height: 0%;"></div>
+                </div>
+            `).join('');
+
+            // load saved state
+            const saved = localStorage.getItem(STORAGE_KEY) || localStorage.getItem('lt_tracker_data');
+            if (saved) {
+                try {
+                    const parsed = JSON.parse(saved);
+                    if (parsed && Array.isArray(parsed.habits)) {
+                        state = {
+                            ...state,
+                            ...parsed,
+                            logs: parsed.logs || parsed.monthsData || {}
+                        };
+                    }
+                } catch (err) {
+                    console.warn('Failed to parse local storage, falling back to default.', err);
+                }
+            } else {
+                ensureMonthData(state.year, state.month);
+                save();
+            }
+
+            window.addEventListener('mouseup', () => { isDragging = false; });
+
+            ySel.value = String(state.year);
+            document.getElementById('monthSel').value = String(state.month);
+
+            setTheme(state.theme, false);
+            buildGrid();
+            updateStats();
+        }
+
+        function setTheme(themeName, persist = true) {
+            state.theme = themeName === 'midnight' ? 'midnight' : 'slate';
+            document.documentElement.setAttribute('data-theme', state.theme);
+
+            const bSlate = document.getElementById('btnSlate');
+            const bMid = document.getElementById('btnMidnight');
+
+            if (state.theme === 'slate') {
+                bSlate.className = 'px-2 py-1 rounded text-[11px] font-bold flex items-center gap-1 bg-slate-900 text-white shadow-sm cursor-pointer';
+                bMid.className = 'px-2 py-1 rounded text-[11px] font-bold flex items-center gap-1 text-slate-600 hover:text-slate-900 cursor-pointer';
+            } else {
+                bMid.className = 'px-2 py-1 rounded text-[11px] font-bold flex items-center gap-1 bg-sky-400 text-slate-950 shadow-sm cursor-pointer';
+                bSlate.className = 'px-2 py-1 rounded text-[11px] font-bold flex items-center gap-1 text-slate-400 hover:text-slate-200 cursor-pointer';
+            }
+
+            if (persist) save();
+        }
+
+        function save() {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+            } catch (e) {
+                // probably quota exceeded or private browsing
+                console.error('Save failed:', e);
+            }
+        }
+
+        function daysInMonth(y, m) {
+            return new Date(y, m + 1, 0).getDate();
+        }
+
+        function ensureMonthData(y = state.year, m = state.month) {
+            const key = `${y}-${m}`;
+            const totalDays = daysInMonth(y, m);
+
+            if (!state.logs[key]) {
+                const checks = {};
+                state.habits.forEach((_, i) => checks[i] = Array(totalDays).fill(false));
+                state.logs[key] = {
+                    checks,
+                    mood: Array(totalDays).fill(7),
+                    sleep: Array(totalDays).fill(7)
+                };
+            } else {
+                // make sure arrays match current habit count / month length
+                const data = state.logs[key];
+                state.habits.forEach((_, i) => {
+                    if (!Array.isArray(data.checks[i])) {
+                        data.checks[i] = Array(totalDays).fill(false);
+                    }
+                });
+                if (!Array.isArray(data.mood) || data.mood.length < totalDays) {
+                    data.mood = Array.from({ length: totalDays }, (_, i) => data.mood?.[i] || 7);
+                }
+                if (!Array.isArray(data.sleep) || data.sleep.length < totalDays) {
+                    data.sleep = Array.from({ length: totalDays }, (_, i) => data.sleep?.[i] || 7);
+                }
+            }
+            return state.logs[key];
+        }
+
+        function getActiveDayIdx(y, m, totalDays, monthData) {
+            const now = new Date();
+            if (now.getFullYear() === y && now.getMonth() === m) {
+                return Math.min(totalDays - 1, now.getDate() - 1);
+            }
+            // fallback for past months: find last active day so streak counter isn't always 0
+            for (let d = totalDays - 1; d >= 0; d--) {
+                for (let h = 0; h < state.habits.length; h++) {
+                    if (monthData.checks[h]?.[d]) return d;
+                }
+            }
+            return 0;
+        }
+
+        function buildGrid() {
+            const { year, month } = state;
+            const totalDays = daysInMonth(year, month);
+            const monthData = ensureMonthData(year, month);
+            const todayIdx = getActiveDayIdx(year, month, totalDays, monthData);
+
+            // top daily chart bars
+            let barsHtml = '';
+            let xAxisHtml = '';
+            for (let d = 0; d < totalDays; d++) {
+                const dayName = DAYS[new Date(year, month, d + 1).getDay()];
+                barsHtml += `
+                    <div onclick="toggleFullDay(${d})" id="dWrap-${d}" class="flex-1 h-full flex items-end justify-center cursor-pointer group">
+                        <div id="dBar-${d}" class="w-full bar-anim rounded-t-sm bg-bar group-hover:opacity-80" style="height: 0%;"></div>
+                    </div>
+                `;
+                xAxisHtml += `<div class="flex-1 flex justify-center overflow-visible"><span class="day-label-rot">${dayName}</span></div>`;
+            }
+            document.getElementById('dailyBars').innerHTML = barsHtml;
+            document.getElementById('dailyXAxis').innerHTML = xAxisHtml;
+
+            // matrix headers
+            const gridColsCss = `grid-template-columns: repeat(${totalDays}, minmax(0, 1fr));`;
+            const wkHdr = document.getElementById('weekHdr');
+            const dnHdr = document.getElementById('dayNameHdr');
+            const numHdr = document.getElementById('dayNumHdr');
+
+            wkHdr.style.cssText = gridColsCss;
+            dnHdr.style.cssText = gridColsCss;
+            numHdr.style.cssText = gridColsCss;
+
+            const weeks = [
+                { label: 'Week 1', span: Math.min(7, totalDays) },
+                { label: 'Week 2', span: Math.max(0, Math.min(7, totalDays - 7)) },
+                { label: 'Week 3', span: Math.max(0, Math.min(7, totalDays - 14)) },
+                { label: 'Week 4', span: Math.max(0, Math.min(7, totalDays - 21)) },
+                { label: 'Week 5', span: Math.max(0, totalDays - 28) }
+            ].filter(w => w.span > 0);
+
+            wkHdr.innerHTML = weeks.map((w, i) => `
+                <div style="grid-column: span ${w.span} / span ${w.span};"
+                     class="hdr flex items-center justify-center text-[10px] uppercase tracking-wider bdr-week ${i < weeks.length - 1 ? 'border-r' : ''}">
+                    ${w.label}
+                </div>
+            `).join('');
+
+            let dnHtml = '';
+            let numHtml = '';
+            for (let d = 0; d < totalDays; d++) {
+                const dayName = DAYS[new Date(year, month, d + 1).getDay()];
+                const isWkEnd = (d + 1) % 7 === 0 && d < totalDays - 1;
+                const isToday = d === todayIdx;
+                const bdr = isWkEnd ? 'bdr-week' : 'bdr-sub';
+
+                dnHtml += `
+                    <div class="flex items-center justify-center border-r ${bdr} ${isToday ? 'bg-sky-500/20 text-sky-400 font-extrabold' : 'subhdr'}">
+                        ${dayName}
+                    </div>
+                `;
+                numHtml += `
+                    <div onclick="toggleFullDay(${d})" title="Toggle Day ${d + 1}"
+                         class="flex items-center justify-center cursor-pointer hover:opacity-80 border-r ${bdr} ${isToday ? 'bg-sky-500 text-slate-950 font-extrabold' : 'panel-alt'}">
+                        ${d + 1}
+                    </div>
+                `;
+            }
+            dnHdr.innerHTML = dnHtml;
+            numHdr.innerHTML = numHtml;
+
+            // build 3-column habit rows
+            let leftHtml = '';
+            let midHtml = '';
+            let rightHtml = '';
+
+            for (let r = 0; r < MAX_ROWS; r++) {
+                const habitName = state.habits[r] || '';
+                const active = Boolean(habitName);
+
+                if (active) {
+                    leftHtml += `
+                        <div id="rowL-${r}" onmouseenter="highlightRow(${r}, true)" onmouseleave="highlightRow(${r}, false)"
+                             class="row-h px-2 flex items-center justify-between gap-1 text-[11px] font-semibold text-slate-100 group">
+                            <span contenteditable="true" spellcheck="false"
+                                  onblur="renameHabit(${r}, this.innerText)"
+                                  onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}"
+                                  class="truncate flex-1 outline-none focus:bg-slate-800 focus:px-1 rounded cursor-text">${escapeHtml(habitName)}</span>
+                            <div class="flex items-center gap-1 shrink-0">
+                                <span id="streak-${r}" class="text-[9px] mono px-1 rounded bg-slate-800 text-amber-400 font-bold">0d</span>
+                                <button onclick="removeHabit(${r})" class="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-rose-400 text-[10px] px-0.5 cursor-pointer">✕</button>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    leftHtml += `
+                        <div onclick="showModal()" class="row-h px-2 flex items-center text-[10px] text-slate-500 hover:text-slate-300 cursor-pointer">
+                            + Add habit...
+                        </div>
+                    `;
+                }
+
+                let cellsHtml = '';
+                for (let d = 0; d < totalDays; d++) {
+                    const checked = active && monthData.checks[r]?.[d];
+                    const isWkEnd = (d + 1) % 7 === 0 && d < totalDays - 1;
+                    const bdr = isWkEnd ? 'bdr-week' : 'bdr-sub';
+                    const todayBg = d === todayIdx ? 'today-col' : '';
+
+                    if (active) {
+                        cellsHtml += `
+                            <div onmousedown="onCellMouseDown(event, ${r}, ${d})" onmouseenter="onCellMouseEnter(${r}, ${d})"
+                                 class="check-cell flex items-center justify-center border-r ${bdr} bg-cell cursor-pointer ${todayBg}">
+                                <input id="c-${r}-${d}" type="checkbox" class="chk" ${checked ? 'checked' : ''} tabindex="-1" />
+                            </div>
+                        `;
+                    } else {
+                        cellsHtml += `<div class="border-r ${bdr} bg-empty"></div>`;
+                    }
+                }
+
+                midHtml += `
+                    <div id="rowM-${r}" onmouseenter="highlightRow(${r}, true)" onmouseleave="highlightRow(${r}, false)"
+                         class="row-h grid" style="${gridColsCss}">
+                        ${cellsHtml}
+                    </div>
+                `;
+
+                if (active) {
+                    rightHtml += `
+                        <div id="rowR-${r}" onmouseenter="highlightRow(${r}, true)" onmouseleave="highlightRow(${r}, false)"
+                             class="row-h grid grid-cols-12 divide-x bdr-sub text-[11px] mono">
+                            <div class="col-span-2 flex items-center justify-center font-semibold txt-sub">${totalDays}</div>
+                            <div id="rDone-${r}" class="col-span-2 flex items-center justify-center font-bold txt-main">0</div>
+                            <div id="rLeft-${r}" class="col-span-2 flex items-center justify-center font-semibold txt-muted">${totalDays}</div>
+                            <div class="col-span-4 px-1.5 py-1 flex items-center">
+                                <div class="w-full h-3.5 rounded-sm overflow-hidden bg-track">
+                                    <div id="rBar-${r}" class="h-full bar-anim bg-bar" style="width: 0%;"></div>
+                                </div>
+                            </div>
+                            <div id="rPct-${r}" class="col-span-2 flex items-center justify-center font-extrabold text-[11px] txt-main">0%</div>
+                        </div>
+                    `;
+                } else {
+                    rightHtml += `
+                        <div class="row-h grid grid-cols-12 divide-x bdr-sub bg-empty">
+                            <div class="col-span-2"></div><div class="col-span-2"></div><div class="col-span-2"></div><div class="col-span-4"></div><div class="col-span-2"></div>
+                        </div>
+                    `;
+                }
+            }
+
+            document.getElementById('habitListEl').innerHTML = leftHtml;
+            document.getElementById('matrixBody').innerHTML = midHtml;
+            document.getElementById('breakdownBody').innerHTML = rightHtml;
+
+            // mood & sleep selects
+            const mRow = document.getElementById('moodRow');
+            const sRow = document.getElementById('sleepRow');
+            mRow.style.cssText = gridColsCss;
+            sRow.style.cssText = gridColsCss;
+
+            let mHtml = '';
+            let sHtml = '';
+            for (let d = 0; d < totalDays; d++) {
+                const mVal = monthData.mood[d] || 7;
+                const sVal = monthData.sleep[d] || 7;
+
+                let mOpts = '';
+                for (let v = 10; v >= 1; v--) mOpts += `<option value="${v}" ${v === mVal ? 'selected' : ''}>${v}</option>`;
+
+                let sOpts = '';
+                for (let v = 12; v >= 3; v--) sOpts += `<option value="${v}" ${v === sVal ? 'selected' : ''}>${v}</option>`;
+
+                mHtml += `<div class="flex items-center justify-center bdr-sub"><select onchange="updateWellness('mood', ${d}, this.value)" class="well-select mono">${mOpts}</select></div>`;
+                sHtml += `<div class="flex items-center justify-center bdr-sub"><select onchange="updateWellness('sleep', ${d}, this.value)" class="well-select mono">${sOpts}</select></div>`;
+            }
+            mRow.innerHTML = mHtml;
+            sRow.innerHTML = sHtml;
+
+            renderMonthTabs();
+        }
+
+        function updateStats() {
+            const { year, month } = state;
+            const totalDays = daysInMonth(year, month);
+            const monthData = ensureMonthData(year, month);
+            const habitCount = state.habits.length;
+            const todayIdx = getActiveDayIdx(year, month, totalDays, monthData);
+
+            const dailyTotals = Array(totalDays).fill(0);
+            let totalCompleted = 0;
+            const totalPossible = habitCount * totalDays;
+            let maxedCount = 0;
+            const rankings = [];
+
+            for (let h = 0; h < habitCount; h++) {
+                const checks = monthData.checks[h] || [];
+                let done = 0;
+                for (let d = 0; d < totalDays; d++) {
+                    if (checks[d]) {
+                        done++;
+                        dailyTotals[d]++;
+                        totalCompleted++;
+                    }
+                }
+
+                const left = Math.max(0, totalDays - done);
+                const pct = totalDays > 0 ? Math.round((done / totalDays) * 100) : 0;
+                if (pct === 100 && totalDays > 0) maxedCount++;
+
+                // calc streak backwards from today
+                let streak = 0;
+                for (let d = todayIdx; d >= 0; d--) {
+                    if (checks[d]) streak++;
+                    else break;
+                }
+
+                rankings.push({ idx: h, name: state.habits[h], done, pct, streak });
+
+                const doneEl = document.getElementById(`rDone-${h}`);
+                const leftEl = document.getElementById(`rLeft-${h}`);
+                const barEl = document.getElementById(`rBar-${h}`);
+                const pctEl = document.getElementById(`rPct-${h}`);
+                const strkEl = document.getElementById(`streak-${h}`);
+
+                if (doneEl) doneEl.textContent = done;
+                if (leftEl) leftEl.textContent = left;
+                if (barEl) barEl.style.width = `${pct}%`;
+                if (pctEl) pctEl.innerHTML = pct === 100 ? `<span title="Maxed!">👑</span>` : `${pct}%`;
+                if (strkEl) strkEl.textContent = `${streak}d`;
+            }
+
+            let perfectDays = 0;
+            for (let d = 0; d < totalDays; d++) {
+                const pct = habitCount > 0 ? Math.round((dailyTotals[d] / habitCount) * 100) : 0;
+                if (pct === 100 && habitCount > 0) perfectDays++;
+
+                const bar = document.getElementById(`dBar-${d}`);
+                const wrap = document.getElementById(`dWrap-${d}`);
+                if (bar) bar.style.height = `${pct}%`;
+                if (wrap) wrap.title = `Day ${d + 1}: ${dailyTotals[d]}/${habitCount} (${pct}%)`;
+            }
+
+            // 5-week breakdown
+            for (let w = 0; w < 5; w++) {
+                const start = w * 7;
+                const end = Math.min(totalDays, start + 7);
+                let wkSum = 0;
+                for (let d = start; d < end; d++) wkSum += dailyTotals[d];
+
+                const wkMax = Math.max(0, end - start) * habitCount;
+                const wkPct = wkMax > 0 ? Math.round((wkSum / wkMax) * 100) : 0;
+
+                const wkBar = document.getElementById(`wkBar-${w}`);
+                const wkWrap = document.getElementById(`wkWrap-${w}`);
+                if (wkBar) wkBar.style.height = `${wkPct}%`;
+                if (wkWrap) wkWrap.title = `Week ${w + 1}: ${wkPct}%`;
+            }
+
+            const overallPct = totalPossible > 0 ? Math.round((totalCompleted / totalPossible) * 100) : 0;
+            document.getElementById('totGoal').textContent = totalPossible;
+            document.getElementById('totDone').textContent = totalCompleted;
+            document.getElementById('totLeft').textContent = Math.max(0, totalPossible - totalCompleted);
+
+            document.getElementById('donutRing').setAttribute('stroke-dasharray', `${overallPct} 100`);
+            document.getElementById('donutPct').textContent = `${overallPct}%`;
+
+            document.getElementById('perfectDaysEl').textContent = perfectDays;
+            document.getElementById('crownsEl').textContent = `${maxedCount} 👑`;
+
+            const todayPct = habitCount > 0 ? Math.round((dailyTotals[todayIdx] / habitCount) * 100) : 0;
+            document.getElementById('activeDayLbl').textContent = `${MONTHS[month].slice(0, 3)} ${todayIdx + 1}`;
+            document.getElementById('todayPct').textContent = `${todayPct}%`;
+
+            const bestStreak = rankings.reduce((max, item) => Math.max(max, item.streak), 0);
+            document.getElementById('topStreak').textContent = `${bestStreak}d`;
+
+            // leaderboard
+            const top10 = [...rankings].sort((a, b) => b.done - a.done || a.idx - b.idx).slice(0, 10);
+            document.getElementById('topListEl').innerHTML = Array.from({ length: 10 }, (_, i) => {
+                const item = top10[i];
+                if (!item) {
+                    return `<div class="px-3 py-1 flex items-center justify-between text-[11px] opacity-40"><span class="mono font-bold w-6">${i + 1}</span><span class="flex-1">—</span></div>`;
+                }
+                return `
+                    <div class="px-3 py-1 flex items-center justify-between text-[11px] hover:opacity-90 transition">
+                        <span class="mono font-extrabold w-6 txt-sub">${i + 1}</span>
+                        <span class="flex-1 font-semibold truncate txt-main">${escapeHtml(item.name)}</span>
+                        <span class="mono font-bold text-[10px] ml-2 px-1.5 py-0.5 rounded panel-alt txt-sub">
+                            ${item.pct === 100 ? '👑 100%' : `${item.pct}%`}
+                        </span>
+                    </div>
+                `;
+            }).join('');
+
+            drawChart(monthData, totalDays);
+            renderMonthTabs();
+        }
+
+        // simple SVG polyline renderer - no need for heavy chart libs
+        function drawChart(monthData, totalDays) {
+            const svg = document.getElementById('trendSvg');
+            if (!svg) return;
+
+            const w = 700, h = 100, padX = 12, padY = 10;
+            const plotW = w - padX * 2;
+            const plotH = h - padY * 2;
+
+            const moodCoords = [];
+            const sleepCoords = [];
+            let moodTotal = 0;
+            let sleepTotal = 0;
+
+            for (let d = 0; d < totalDays; d++) {
+                const mv = Number(monthData.mood[d] || 7);
+                const sv = Number(monthData.sleep[d] || 7);
+                moodTotal += mv;
+                sleepTotal += sv;
+
+                const x = (padX + (totalDays > 1 ? (d / (totalDays - 1)) * plotW : plotW / 2)).toFixed(1);
+                // normalize 1..12 range onto plot height
+                const ym = (padY + plotH - ((mv - 1) / 11) * plotH).toFixed(1);
+                const ys = (padY + plotH - ((sv - 1) / 11) * plotH).toFixed(1);
+
+                moodCoords.push(`${x},${ym}`);
+                sleepCoords.push(`${x},${ys}`);
+            }
+
+            document.getElementById('avgMoodEl').textContent = `${(moodTotal / totalDays).toFixed(1)} / 10`;
+            document.getElementById('avgSleepEl').textContent = `${(sleepTotal / totalDays).toFixed(1)} hrs`;
+
+            const firstX = moodCoords[0].split(',')[0];
+            const lastX = moodCoords[moodCoords.length - 1].split(',')[0];
+            const areaPoints = `${firstX},${h} ${moodCoords.join(' ')} ${lastX},${h}`;
+
+            const guides = [20, 50, 80].map(y =>
+                `<line x1="0" y1="${y}" x2="${w}" y2="${y}" stroke="var(--grid-guide)" stroke-dasharray="3 3" stroke-width="1" />`
+            ).join('');
+
+            svg.innerHTML = `
+                <defs>
+                    <linearGradient id="moodGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="#10B981" stop-opacity="0.25"/>
+                        <stop offset="100%" stop-color="#10B981" stop-opacity="0.0"/>
+                    </linearGradient>
+                </defs>
+                ${guides}
+                <polygon points="${areaPoints}" fill="url(#moodGrad)" />
+                <polyline points="${sleepCoords.join(' ')}" fill="none" stroke="var(--line-sleep)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                <polyline points="${moodCoords.join(' ')}" fill="none" stroke="var(--line-mood)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
+            `;
+        }
+
+        function onCellMouseDown(e, r, d) {
+            e.preventDefault();
+            const monthData = ensureMonthData();
+            isDragging = true;
+            dragTargetVal = !Boolean(monthData.checks[r]?.[d]);
+            setCheck(r, d, dragTargetVal, true);
+        }
+
+        function onCellMouseEnter(r, d) {
+            if (!isDragging) return;
+            setCheck(r, d, dragTargetVal, false);
+        }
+
+        function setCheck(r, d, val, fireConfetti) {
+            const monthData = ensureMonthData();
+            if (!monthData.checks[r] || monthData.checks[r][d] === val) return;
+
+            monthData.checks[r][d] = val;
+            const input = document.getElementById(`c-${r}-${d}`);
+            if (input) input.checked = val;
+
+            save();
+            updateStats();
+
+            if (fireConfetti && val && typeof confetti === 'function') {
+                const totalDays = daysInMonth(state.year, state.month);
+                const rowCleared = monthData.checks[r].slice(0, totalDays).every(Boolean);
+                const colCleared = state.habits.every((_, h) => monthData.checks[h]?.[d]);
+                if (rowCleared || colCleared) {
+                    confetti({ particleCount: 40, spread: 60, origin: { y: 0.7 } });
+                }
+            }
+        }
+
+        function toggleFullDay(d) {
+            const monthData = ensureMonthData();
+            const allDone = state.habits.every((_, h) => monthData.checks[h]?.[d]);
+            const nextVal = !allDone;
+
+            state.habits.forEach((_, h) => {
+                monthData.checks[h][d] = nextVal;
+                const input = document.getElementById(`c-${h}-${d}`);
+                if (input) input.checked = nextVal;
+            });
+
+            save();
+            updateStats();
+            if (nextVal && typeof confetti === 'function') {
+                confetti({ particleCount: 50, spread: 65, origin: { y: 0.65 } });
+            }
+        }
+
+        function checkAllToday() {
+            const totalDays = daysInMonth(state.year, state.month);
+            const monthData = ensureMonthData();
+            const todayIdx = getActiveDayIdx(state.year, state.month, totalDays, monthData);
+
+            state.habits.forEach((_, h) => {
+                monthData.checks[h][todayIdx] = true;
+                const input = document.getElementById(`c-${h}-${todayIdx}`);
+                if (input) input.checked = true;
+            });
+
+            save();
+            updateStats();
+            if (typeof confetti === 'function') {
+                confetti({ particleCount: 60, spread: 70, origin: { y: 0.6 } });
+            }
+        }
+
+        function highlightRow(r, active) {
+            document.getElementById(`rowL-${r}`)?.classList.toggle('row-hover-left', active);
+            document.getElementById(`rowM-${r}`)?.classList.toggle('row-hover-main', active);
+            document.getElementById(`rowR-${r}`)?.classList.toggle('row-hover-main', active);
+        }
+
+        function renameHabit(r, newText) {
+            const val = (newText || '').trim();
+            if (!val) {
+                buildGrid();
+                updateStats();
+                return;
+            }
+            state.habits[r] = val;
+            save();
+            updateStats();
+        }
+
+        function removeHabit(r) {
+            if (state.habits.length <= 1) return; // keep at least 1 row
+            state.habits.splice(r, 1);
+
+            // shift check arrays down to match new indices
+            Object.keys(state.logs).forEach(k => {
+                const old = state.logs[k].checks;
+                const updated = {};
+                state.habits.forEach((_, newIdx) => {
+                    const oldIdx = newIdx >= r ? newIdx + 1 : newIdx;
+                    updated[newIdx] = old[oldIdx] || [];
+                });
+                state.logs[k].checks = updated;
+            });
+
+            save();
+            buildGrid();
+            updateStats();
+        }
+
+        function updateWellness(type, d, val) {
+            const monthData = ensureMonthData();
+            monthData[type][d] = Number(val) || 7;
+            save();
+            updateStats();
+        }
+
+        function onDateChange() {
+            state.year = Number(document.getElementById('yearSel').value);
+            state.month = Number(document.getElementById('monthSel').value);
+            ensureMonthData(state.year, state.month);
+            save();
+            buildGrid();
+            updateStats();
+        }
+
+        function switchMonthTab(m) {
+            state.month = m;
+            document.getElementById('monthSel').value = String(m);
+            ensureMonthData(state.year, m);
+            save();
+            buildGrid();
+            updateStats();
+        }
+
+        function renderMonthTabs() {
+            const container = document.getElementById('monthTabs');
+            if (!container) return;
+
+            container.innerHTML = MONTHS.map((name, idx) => {
+                const isCurrent = idx === state.month;
+                return `
+                    <button onclick="switchMonthTab(${idx})"
+                        class="h-full px-3 flex items-center gap-1 border-r bdr-strong transition cursor-pointer ${
+                            isCurrent ? 'hdr font-extrabold shadow-sm' : 'panel-alt txt-sub hover:opacity-85'
+                        }">
+                        <span>${name}</span>
+                    </button>
+                `;
+            }).join('');
+        }
+
+        function clearMonth() {
+            // TODO: maybe add a custom confirm modal later if accidental clicks happen
+            const totalDays = daysInMonth(state.year, state.month);
+            const monthData = ensureMonthData();
+            state.habits.forEach((_, h) => {
+                monthData.checks[h] = Array(totalDays).fill(false);
+            });
+            save();
+            buildGrid();
+            updateStats();
+        }
+
+        function showModal() {
+            const el = document.getElementById('modalOverlay');
+            el.classList.remove('hidden');
+            el.classList.add('flex');
+            const inp = document.getElementById('habitInput');
+            inp.value = '';
+            setTimeout(() => inp.focus(), 40);
+        }
+
+        function hideModal() {
+            const el = document.getElementById('modalOverlay');
+            el.classList.add('hidden');
+            el.classList.remove('flex');
+        }
+
+        function appendEmoji(emoji) {
+            const inp = document.getElementById('habitInput');
+            if (!inp) return;
+            inp.value = `${inp.value.trim()} ${emoji}`.trim();
+            inp.focus();
+        }
+
+        function onAddHabit(e) {
+            e.preventDefault();
+            const inp = document.getElementById('habitInput');
+            const name = inp.value.trim();
+            if (!name) return;
+
+            if (state.habits.length >= MAX_ROWS) {
+                state.habits[MAX_ROWS - 1] = name;
+            } else {
+                state.habits.push(name);
+            }
+
+            ensureMonthData();
+            save();
+            hideModal();
+            buildGrid();
+            updateStats();
+        }
+
+        function escapeHtml(str) {
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        window.addEventListener('DOMContentLoaded', init);
+    </script>
 </body>
 </html>
